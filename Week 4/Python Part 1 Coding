@@ -1,1 +1,125 @@
+import serial
+import time
+import math
+from collections import deque
 
+# ================== CONFIG ==================
+SERIAL_PORT = 'COM5'   # 🔥 Tukar ikut port Arduino kau
+BAUD_RATE = 9600
+
+# Store last 40 data points (~2 sec)
+history_x = deque(maxlen=40)
+history_y = deque(maxlen=40)
+
+# ================== FUNCTION ==================
+def is_circular_motion(x_data, y_data):
+    if len(x_data) < 10:
+        return False
+
+    # Step 1: Mean (center)
+    mean_x = sum(x_data) / len(x_data)
+    mean_y = sum(y_data) / len(y_data)
+
+    centered_x = [x - mean_x for x in x_data]
+    centered_y = [y - mean_y for y in y_data]
+
+    # Step 2: Amplitude (variance)
+    var_x = sum(x**2 for x in centered_x) / len(centered_x)
+    var_y = sum(y**2 for y in centered_y) / len(centered_y)
+
+    if var_x < 30 or var_y < 30:
+        return False
+
+    # Step 3: Symmetry
+    std_x = math.sqrt(var_x)
+    std_y = math.sqrt(var_y)
+
+    if std_y == 0:
+        return False
+
+    ratio = std_x / std_y
+
+    if ratio < 0.5 or ratio > 2:
+        return False
+
+    # Step 4: Cross product (rotation direction)
+    cross_products = []
+
+    for i in range(len(centered_x) - 1):
+        x1, y1 = centered_x[i], centered_y[i]
+        x2, y2 = centered_x[i+1], centered_y[i+1]
+
+        cross = x1 * y2 - y1 * x2
+        cross_products.append(cross)
+
+    # Step 5: Consistent direction
+    positive = sum(1 for c in cross_products if c > 0)
+    negative = sum(1 for c in cross_products if c < 0)
+    total = len(cross_products)
+
+    if total == 0:
+        return False
+
+    if positive / total > 0.7 or negative / total > 0.7:
+        return True
+
+    return False
+
+
+# ================== MAIN ==================
+def main():
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+    time.sleep(2)
+
+    print("System ready. Move sensor in circle...")
+
+    led_is_on = False
+
+    try:
+        while True:
+            raw = ser.readline().decode(errors='ignore').strip()
+
+            if raw:
+                print("DATA:", raw)  # debug
+
+                parts = raw.split(',')
+
+                if len(parts) >= 2:
+                    try:
+                        ax = int(parts[0])
+                        ay = int(parts[1])
+
+                        history_x.append(ax)
+                        history_y.append(ay)
+
+                        if len(history_x) == 40:
+                            if is_circular_motion(history_x, history_y):
+
+                                led_is_on = not led_is_on
+
+                                if led_is_on:
+                                    print(" Circle detected → LED ON")
+                                    ser.write(b'O')
+                                else:
+                                    print(" Circle detected → LED OFF")
+                                    ser.write(b'F')
+
+                                # Reset buffer (debounce)
+                                history_x.clear()
+                                history_y.clear()
+
+                    except ValueError:
+                        print("Invalid data:", raw)
+
+    except KeyboardInterrupt:
+        print("\nStopped by user")
+
+    finally:
+        ser.write(b'F')
+        ser.close()
+        print("Serial closed")
+
+
+# ================== RUN ==================
+if __name__ == "__main__":
+    main()
