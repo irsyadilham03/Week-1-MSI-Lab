@@ -4,7 +4,7 @@ import math
 from collections import deque
 
 # ================== CONFIG ==================
-SERIAL_PORT = 'COM5'   # 🔥 Tukar ikut port Arduino kau
+SERIAL_PORT = 'COM5'  
 BAUD_RATE = 9600
 
 # Store last 40 data points (~2 sec)
