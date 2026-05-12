@@ -1,0 +1,62 @@
+#include "BluetoothSerial.h"
+#include <ESP32Servo.h> // Required for Task 1
+
+BluetoothSerial SerialBT;
+Servo myServo;
+
+const int potpin = 34;    // Potentiometer pin
+      // Onboard LED pin
+const int servoPin = 13; // Suggested pin for Servo signal
+
+char command;
+int potValue = 0;
+
+void setup() 
+{
+  Serial.begin(9600);                   
+  SerialBT.begin("Group_10"); // Replace with your group name
+  
+
+  myServo.attach(servoPin); // Initialize the servo
+  
+  Serial.println("Bluetooth initialized... Ready to receive commands.");
+}
+
+
+void loop() 
+{
+  // Read potentiometer
+  potValue = analogRead(potpin);
+
+  // Convert pot value to angle
+  int potAngle = map(potValue, 0, 4095, 0, 180);
+
+  // Default mode: potentiometer control
+  int angle = potAngle;
+
+  // Check if Bluetooth command exists
+  if (SerialBT.available())
+  {
+    command = SerialBT.read();
+    Serial.print("Command received: ");
+    Serial.println(command);
+
+    switch (command)
+    {
+      case 'L': angle = 0;   break;   // Left
+      case 'M': angle = 90;  break;   // Middle
+      case 'R': angle = 180; break;   // Right
+    }
+  }
+
+  // Move servo
+  myServo.write(angle);
+
+  // Send data to phone
+  SerialBT.print("Pot: ");
+  SerialBT.print(potValue);
+  SerialBT.print(" | Angle: ");
+  SerialBT.println(angle);
+
+  delay(1000);
+}
